@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dijkstra's Algorithm Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .code-font {
+            font-family: 'Fira Code', monospace;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #fce7f3 0%, #dbeafe 100%);
+            min-height: 100vh;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .node-circle {
+            transition: all 0.3s ease;
+        }
+        
+        .edge-line {
+            transition: all 0.3s ease;
+        }
+        
+        .code-line {
+            transition: all 0.3s ease;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            margin: 0.25rem 0;
+        }
+        
+        .code-line.active {
+            background: linear-gradient(90deg, #fbcfe8 0%, #bfdbfe 100%);
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(236, 72, 153, 0.3);
+        }
+        
+        .code-line.executed {
+            background: rgba(191, 219, 254, 0.3);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #ec4899 0%, #3b82f6 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(236, 72, 153, 0.3);
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, #fce7f3 0%, #dbeafe 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(147, 51, 234, 0.2);
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, rgba(252, 231, 243, 0.8) 0%, rgba(219, 234, 254, 0.8) 100%);
+            border-left: 4px solid #ec4899;
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(236, 72, 153, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.7); }
+        }
+        
+        .node-visiting {
+            animation: pulse-glow 1s ease-in-out infinite;
+        }
+        
+        .tooltip {
+            position: absolute;
+            background: rgba(30, 30, 30, 0.95);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
+    </style>
+</head>
+<body class="p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="glass-effect rounded-2xl p-6 mb-6 shadow-xl">
+            <h1 class="text-4xl font-bold bg-gradient-to-r from-pink-600 to-blue-600 bg-clip-text text-transparent mb-2">
+                Dijkstra's Algorithm Visualizer
+            </h1>
+            <p class="text-gray-600">Interactive visualization of the shortest path algorithm</p>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Left Panel: Visualization -->
+            <div class="glass-effect rounded-2xl p-6 shadow-xl">
+                <h2 class="text-2xl font-semibold text-gray-800 mb-4">Graph Visualization</h2>
+                
+                <!-- Controls -->
+                <div class="flex flex-wrap gap-3 mb-6">
+                    <button id="playBtn" class="btn-primary text-white px-6 py-2 rounded-lg font-medium shadow-lg">
+                        ▶ Play
+                    </button>
+                    <button id="pauseBtn" class="btn-secondary text-gray-700 px-6 py-2 rounded-lg font-medium shadow-lg" disabled>
+                        ⏸ Pause
+                    </button>
+                    <button id="stepBtn" class="btn-secondary text-gray-700 px-6 py-2 rounded-lg font-medium shadow-lg">
+                        ⏭ Step
+                    </button>
+                    <button id="resetBtn" class="btn-secondary text-gray-700 px-6 py-2 rounded-lg font-medium shadow-lg">
+                        🔄 Reset
+                    </button>
+                    <select id="speedControl" class="btn-secondary text-gray-700 px-4 py-2 rounded-lg font-medium shadow-lg">
+                        <option value="2000">Slow</option>
+                        <option value="1000" selected>Normal</option>
+                        <option value="500">Fast</option>
+                    </select>
+                </div>
+
+                <!-- Graph Canvas -->
+                <div class="relative bg-white rounded-xl p-4 shadow-inner" style="height: 500px;">
+                    <svg id="graphCanvas" width="100%" height="100%" class="rounded-xl"></svg>
+                    <div id="tooltip" class="tooltip"></div>
+                </div>
+
+                <!-- Legend -->
+                <div class="mt-4 flex flex-wrap gap-4 text-sm">
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-full bg-pink-400"></div>
+                        <span>Start Node</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-full bg-blue-400"></div>
+                        <span>Visiting</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-full bg-green-400"></div>
+                        <span>Visited</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded-full bg-purple-400"></div>
+                        <span>In Path</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Code & Info -->
+            <div class="flex flex-col gap-6">
+                <!-- Statistics -->
+                <div class="glass-effect rounded-2xl p-6 shadow-xl">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Algorithm Stats</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="stat-card rounded-xl p-4 shadow">
+                            <div class="text-sm text-gray-600 mb-1">Current Step</div>
+                            <div id="stepCount" class="text-2xl font-bold text-pink-600">0</div>
+                        </div>
+                        <div class="stat-card rounded-xl p-4 shadow">
+                            <div class="text-sm text-gray-600 mb-1">Nodes Visited</div>
+                            <div id="visitedCount" class="text-2xl font-bold text-blue-600">0</div>
+                        </div>
+                        <div class="stat-card rounded-xl p-4 shadow">
+                            <div class="text-sm text-gray-600 mb-1">Time Complexity</div>
+                            <div class="text-lg font-bold text-purple-600">O((V+E)log V)</div>
+                        </div>
+                        <div class="stat-card rounded-xl p-4 shadow">
+                            <div class="text-sm text-gray-600 mb-1">Space Complexity</div>
+                            <div class="text-lg font-bold text-purple-600">O(V)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Current Step Explanation -->
+                <div class="glass-effect rounded-2xl p-6 shadow-xl">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-3">Current Step</h2>
+                    <div id="stepExplanation" class="text-gray-700 leading-relaxed">
+                        Click "Play" or "Step" to begin the visualization.
+                    </div>
+                </div>
+
+                <!-- Pseudocode -->
+                <div class="glass-effect rounded-2xl p-6 shadow-xl flex-1">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Pseudocode</h2>
+                    <div id="pseudocode" class="code-font text-sm space-y-1 overflow-auto" style="max-height: 400px;">
+                        <div class="code-line" data-line="0">function dijkstra(graph, start):</div>
+                        <div class="code-line" data-line="1">&nbsp;&nbsp;dist[start] ← 0</div>
+                        <div class="code-line" data-line="2">&nbsp;&nbsp;for each vertex v in graph:</div>
+                        <div class="code-line" data-line="3">&nbsp;&nbsp;&nbsp;&nbsp;if v ≠ start:</div>
+                        <div class="code-line" data-line="4">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dist[v] ← ∞</div>
+                        <div class="code-line" data-line="5">&nbsp;&nbsp;&nbsp;&nbsp;add v to priority queue Q</div>
+                        <div class="code-line" data-line="6">&nbsp;&nbsp;</div>
+                        <div class="code-line" data-line="7">&nbsp;&nbsp;while Q is not empty:</div>
+                        <div class="code-line" data-line="8">&nbsp;&nbsp;&nbsp;&nbsp;u ← vertex in Q with min dist[u]</div>
+                        <div class="code-line" data-line="9">&nbsp;&nbsp;&nbsp;&nbsp;remove u from Q</div>
+                        <div class="code-line" data-line="10">&nbsp;&nbsp;&nbsp;&nbsp;</div>
+                        <div class="code-line" data-line="11">&nbsp;&nbsp;&nbsp;&nbsp;for each neighbor v of u:</div>
+                        <div class="code-line" data-line="12">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;alt ← dist[u] + weight(u, v)</div>
+                        <div class="code-line" data-line="13">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if alt < dist[v]:</div>
+                        <div class="code-line" data-line="14">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dist[v] ← alt</div>
+                        <div class="code-line" data-line="15">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;prev[v] ← u</div>
+                        <div class="code-line" data-line="16">&nbsp;&nbsp;</div>
+                        <div class="code-line" data-line="17">&nbsp;&nbsp;return dist, prev</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Graph data structure
+        const graph = {
+            nodes: [
+                { id: 'A', x: 100, y: 150, label: 'A' },
+                { id: 'B', x: 250, y: 80, label: 'B' },
+                { id: 'C', x: 250, y: 220, label: 'C' },
+                { id: 'D', x: 400, y: 80, label: 'D' },
+                { id: 'E', x: 400, y: 220, label: 'E' },
+                { id: 'F', x: 550, y: 150, label: 'F' }
+            ],
+            edges: [
+                { from: 'A', to: 'B', weight: 4 },
+                { from: 'A', to: 'C', weight: 2 },
+                { from: 'B', to: 'D', weight: 5 },
+                { from: 'C', to: 'B', weight: 1 },
+                { from: 'C', to: 'E', weight: 10 },
+                { from: 'D', to: 'F', weight: 2 },
+                { from: 'E', to: 'D', weight: 3 },
+                { from: 'E', to: 'F', weight: 7 }
+            ]
+        };
+
+        // Algorithm state
+        let algorithmState = {
+            distances: {},
+            previous: {},
+            unvisited: new Set(),
+            visited: new Set(),
+            current: null,
+            path: [],
+            step: 0,
+            currentLine: -1,
+            isRunning: false,
+            isPaused: false,
+            speed: 1000,
+            startNode: 'A',
+            targetNode: 'F'
+        };
+
+        // Algorithm steps
+        let steps = [];
+        let currentStepIndex = 0;
+
+        // DOM elements
+        const svg = document.getElementById('graphCanvas');
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const stepBtn = document.getElementById('stepBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const speedControl = document.getElementById('speedControl');
+        const stepCountEl = document.getElementById('stepCount');
+        const visitedCountEl = document.getElementById('visitedCount');
+        const stepExplanationEl = document.getElementById('stepExplanation');
+        const tooltip = document.getElementById('tooltip');
+
+        // Initialize
+        function init() {
+            drawGraph();
+            resetAlgorithm();
+            attachEventListeners();
+        }
+
+        // Draw the graph
+        function drawGraph() {
+            svg.innerHTML = '';
+            
+            // Draw edges
+            graph.edges.forEach(edge => {
+                const fromNode = graph.nodes.find(n => n.id === edge.from);
+                const toNode = graph.nodes.find(n => n.id === edge.to);
+                
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', fromNode.x);
+                line.setAttribute('y1', fromNode.y);
+                line.setAttribute('x2', toNode.x);
+                line.setAttribute('y2', toNode.y);
+                line.setAttribute('stroke', '#e5e7eb');
+                line.setAttribute('stroke-width', '3');
+                line.setAttribute('class', 'edge-line');
+                line.setAttribute('id', `edge-${edge.from}-${edge.to}`);
+                svg.appendChild(line);
+                
+                // Weight label
+                const midX = (fromNode.x + toNode.x) / 2;
+                const midY = (fromNode.y + toNode.y) / 2;
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', midX);
+                text.setAttribute('y', midY - 10);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('fill', '#6b7280');
+                text.setAttribute('font-weight', 'bold');
+                text.setAttribute('font-size', '14');
+                text.textContent = edge.weight;
+                svg.appendChild(text);
+            });
+            
+            // Draw nodes
+            graph.nodes.forEach(node => {
+                const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                group.setAttribute('id', `node-${node.id}`);
+                group.setAttribute('class', 'node-circle');
+                
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', node.x);
+                circle.setAttribute('cy', node.y);
+                circle.setAttribute('r', '30');
+                circle.setAttribute('fill', '#f3f4f6');
+                circle.setAttribute('stroke', '#d1d5db');
+                circle.setAttribute('stroke-width', '3');
+                group.appendChild(circle);
+                
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', node.x);
+                text.setAttribute('y', node.y + 5);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('fill', '#374151');
+                text.setAttribute('font-weight', 'bold');
+                text.setAttribute('font-size', '18');
+                text.textContent = node.id;
+                group.appendChild(text);
+                
+                // Distance label
+                const distText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                distText.setAttribute('x', node.x);
+                distText.setAttribute('y', node.y + 50);
+                distText.setAttribute('text-anchor', 'middle');
+                distText.setAttribute('fill', '#ec4899');
+                distText.setAttribute('font-weight', 'bold');
+                distText.setAttribute('font-size', '14');
+                distText.setAttribute('id', `dist-${node.id}`);
+                distText.textContent = '∞';
+                group.appendChild(distText);
+                
+                // Hover events
+                group.addEventListener('mouseenter', (e) => {
+                    const dist = algorithmState.distances[node.id];
+                    const distStr = dist === Infinity ? '∞' : dist;
+                    tooltip.textContent = `Node ${node.id}: Distance = ${distStr}`;
+                    tooltip.style.display = 'block';
+                });
+                
+                group.addEventListener('mousemove', (e) => {
+                    tooltip.style.left = e.pageX + 10 + 'px';
+                    tooltip.style.top = e.pageY + 10 + 'px';
+                });
+                
+                group.addEventListener('mouseleave', () => {
+                    tooltip.style.display = 'none';
+                });
+                
+                svg.appendChild(group);
+            });
+        }
+
+        // Reset algorithm
+        function resetAlgorithm() {
+            algorithmState = {
+                distances: {},
+                previous: {},
+                unvisited: new Set(),
+                visited: new Set(),
+                current: null,
+                path: [],
+                step: 0,
+                currentLine: -1,
+                isRunning: false,
+                isPaused: false,
+                speed: parseInt(speedControl.value),
+                startNode: 'A',
+                targetNode: 'F'
+            };
+            
+            graph.nodes.forEach(node => {
+                algorithmState.distances[node.id] = Infinity;
+                algorithmState.previous[node.id] = null;
+                algorithmState.unvisited.add(node.id);
+            });
+            
+            algorithmState.distances[algorithmState.startNode] = 0;
+            
+            steps = generateSteps();
+            currentStepIndex = 0;
+            
+            updateUI();
+            highlightCodeLine(-1);
+            stepExplanationEl.textContent = 'Click "Play" or "Step" to begin the visualization.';
+        }
+
+        // Generate algorithm steps
+        function generateSteps() {
+            const steps = [];
+            const distances = { ...algorithmState.distances };
+            const previous = {};
+            const unvisited = new Set(algorithmState.unvisited);
+            const visited = new Set();
+            
+            graph.nodes.forEach(node => {
+                previous[node.id] = null;
+            });
+            
+            steps.push({
+                line: 1,
+                current: null,
+                distances: { ...distances },
+                previous: { ...previous },
+                unvisited: new Set(unvisited),
+                visited: new Set(visited),
+                explanation: `Initialize distance to start node '${algorithmState.startNode}' as 0, all others as infinity.`
+            });
+            
+            while (unvisited.size > 0) {
+                let minNode = null;
+                let minDist = Infinity;
+                
+                for (let node of unvisited) {
+                    if (distances[node] < minDist) {
+                        minDist = distances[node];
+                        minNode = node;
+                    }
+                }
+                
+                if (minNode === null || minDist === Infinity) break;
+                
+                steps.push({
+                    line: 8,
+                    current: minNode,
+                    distances: { ...distances },
+                    previous: { ...previous },
+                    unvisited: new Set(unvisited),
+                    visited: new Set(visited),
+                    explanation: `Select node '${minNode}' with minimum distance ${minDist}.`
+                });
+                
+                unvisited.delete(minNode);
+                visited.add(minNode);
+                
+                steps.push({
+                    line: 9,
+                    current: minNode,
+                    distances: { ...distances },
+                    previous: { ...previous },
+                    unvisited: new Set(unvisited),
+                    visited: new Set(visited),
+                    explanation: `Remove node '${minNode}' from unvisited set.`
+                });
+                
+                const neighbors = graph.edges.filter(e => e.from === minNode);
+                
+                for (let edge of neighbors) {
+                    const neighbor = edge.to;
+                    
+                    if (!unvisited.has(neighbor)) continue;
+                    
+                    const alt = distances[minNode] + edge.weight;
+                    
+                    steps.push({
+                        line: 12,
+                        current: minNode,
+                        examining: neighbor,
+                        distances: { ...distances },
+                        previous: { ...previous },
+                        unvisited: new Set(unvisited),
+                        visited: new Set(visited),
+                        explanation: `Examining neighbor '${neighbor}'. Alternative distance: ${distances[minNode]} + ${edge.weight} = ${alt}.`
+                    });
+                    
+                    if (alt < distances[neighbor]) {
+                        distances[neighbor] = alt;
+                        previous[neighbor] = minNode;
+                        
+                        steps.push({
+                            line: 14,
+                            current: minNode,
+                            examining: neighbor,
+                            distances: { ...distances },
+                            previous: { ...previous },
+                            unvisited: new Set(unvisited),
+                            visited: new Set(visited),
+                            explanation: `Update distance to '${neighbor}': ${alt} (shorter path found through '${minNode}').`
+                        });
+                    }
+                }
+            }
+            
+            // Build final path
+            const path = [];
+            let current = algorithmState.targetNode;
+            while (current !== null) {
+                path.unshift(current);
+                current = previous[current];
+            }
+            
+            steps.push({
+                line: 17,
+                current: null,
+                distances: { ...distances },
+                previous: { ...previous },
+                unvisited: new Set(),
+                visited: new Set(visited),
+                path: path,
+                explanation: `Algorithm complete! Shortest path from '${algorithmState.startNode}' to '${algorithmState.targetNode}': ${path.join(' → ')} with total distance ${distances[algorithmState.targetNode]}.`
+            });
+            
+            return steps;
+        }
+
+        // Execute a step
+        function executeStep() {
+            if (currentStepIndex >= steps.length) {
+                algorithmState.isRunning = false;
+                playBtn.disabled = false;
+                pauseBtn.disabled = true;
+                return;
+            }
+            
+            const step = steps[currentStepIndex];
+            
+            algorithmState.current = step.current;
+            algorithmState.distances = { ...step.distances };
+            algorithmState.previous = { ...step.previous };
+            algorithmState.unvisited = new Set(step.unvisited);
+            algorithmState.visited = new Set(step.visited);
+            algorithmState.currentLine = step.line;
+            algorithmState.step = currentStepIndex + 1;
+            
+            if (step.path) {
+                algorithmState.path = step.path;
+            }
+            
+            updateUI();
+            highlightCodeLine(step.line);
+            stepExplanationEl.textContent = step.explanation;
+            
+            currentStepIndex++;
+            
+            if (algorithmState.isRunning && !algorithmState.isPaused) {
+                setTimeout(executeStep, algorithmState.speed);
+            }
+        }
+
+        // Update UI
+        function updateUI() {
+            stepCountEl.textContent = algorithmState.step;
+            visitedCountEl.textContent = algorithmState.visited.size;
+            
+            // Update node colors and distances
+            graph.nodes.forEach(node => {
+                const nodeEl = document.getElementById(`node-${node.id}`);
+                const circle = nodeEl.querySelector('circle');
+                const distText = document.getElementById(`dist-${node.id}`);
+                
+                const dist = algorithmState.distances[node.id];
+                distText.textContent = dist === Infinity ? '∞' : dist;
+                
+                // Remove previous classes
+                nodeEl.classList.remove('node-visiting');
+                
+                if (algorithmState.path.includes(node.id)) {
+                    gsap.to(circle, { fill: '#c084fc', stroke: '#a855f7', duration: 0.5 });
+                } else if (node.id === algorithmState.startNode) {
+                    gsap.to(circle, { fill: '#f9a8d4', stroke: '#ec4899', duration: 0.5 });
+                } else if (node.id === algorithmState.current) {
+                    gsap.to(circle, { fill: '#93c5fd', stroke: '#3b82f6', duration: 0.5 });
+                    nodeEl.classList.add('node-visiting');
+                } else if (algorithmState.visited.has(node.id)) {
+                    gsap.to(circle, { fill: '#86efac', stroke: '#22c55e', duration: 0.5 });
+                } else {
+                    gsap.to(circle, { fill: '#f3f4f6', stroke: '#d1d5db', duration: 0.5 });
+                }
+            });
+            
+            // Update edge colors
+            graph.edges.forEach(edge => {
+                const edgeEl = document.getElementById(`edge-${edge.from}-${edge.to}`);
+                if (algorithmState.path.length > 1) {
+                    let inPath = false;
+                    for (let i = 0; i < algorithmState.path.length - 1; i++) {
+                        if (algorithmState.path[i] === edge.from && algorithmState.path[i + 1] === edge.to) {
+                            inPath = true;
+                            break;
+                        }
+                    }
+                    if (inPath) {
+                        gsap.to(edgeEl, { stroke: '#a855f7', strokeWidth: 5, duration: 0.5 });
+                    } else {
+                        gsap.to(edgeEl, { stroke: '#e5e7eb', strokeWidth: 3, duration: 0.5 });
+                    }
+                } else {
+                    gsap.to(edgeEl, { stroke: '#e5e7eb', strokeWidth: 3, duration: 0.5 });
+                }
+            });
+        }
+
+        // Highlight code line
+        function highlightCodeLine(lineNumber) {
+            document.querySelectorAll('.code-line').forEach(line => {
+                line.classList.remove('active');
+                if (parseInt(line.dataset.line) < lineNumber) {
+                    line.classList.add('executed');
+                } else {
+                    line.classList.remove('executed');
+                }
+            });
+            
+            if (lineNumber >= 0) {
+                const activeLine = document.querySelector(`.code-line[data-line="${lineNumber}"]`);
+                if (activeLine) {
+                    activeLine.classList.add('active');
+                    activeLine.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+        }
+
+        // Event listeners
+        function attachEventListeners() {
+            playBtn.addEventListener('click', () => {
+                if (currentStepIndex >= steps.length) {
+                    resetAlgorithm();
+                    currentStepIndex = 0;
+                }
+                algorithmState.isRunning = true;
+                algorithmState.isPaused = false;
+                playBtn.disabled = true;
+                pauseBtn.disabled = false;
+                stepBtn.disabled = true;
+                executeStep();
+            });
+            
+            pauseBtn.addEventListener('click', () => {
+                algorithmState.isPaused = true;
+                algorithmState.isRunning = false;
+                playBtn.disabled = false;
+                pauseBtn.disabled = true;
+                stepBtn.disabled = false;
+            });
+            
+            stepBtn.addEventListener('click', () => {
+                if (currentStepIndex >= steps.length) {
+                    resetAlgorithm();
+                    currentStepIndex = 0;
+                }
+                executeStep();
+            });
+            
+            resetBtn.addEventListener('click', () => {
+                algorithmState.isRunning = false;
+                algorithmState.isPaused = false;
+                playBtn.disabled = false;
+                pauseBtn.disabled = true;
+                stepBtn.disabled = false;
+                currentStepIndex = 0;
+                resetAlgorithm();
+            });
+            
+            speedControl.addEventListener('change', (e) => {
+                algorithmState.speed = parseInt(e.target.value);
+            });
+        }
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>
