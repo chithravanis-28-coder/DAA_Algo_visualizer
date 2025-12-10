@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ford-Fulkerson Algorithm Visualizer</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- GSAP for Animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0; /* Slate 200 */
+            overflow: hidden; /* Prevent scroll */
+        }
+
+        .code-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+
+        .node-circle {
+            transition: filter 0.3s ease;
+            cursor: pointer;
+        }
+        .node-circle:hover {
+            filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.6));
+        }
+
+        .highlight-line {
+            background-color: #334155; /* Slate 700 */
+            border-left: 4px solid #38bdf8; /* Sky 400 */
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="h-16 bg-slate-800 border-b border-slate-700 flex items-center justify-between px-6 shadow-md z-10">
+        <div class="flex items-center gap-3">
+            <div class="bg-blue-600 p-2 rounded-lg">
+                <i class="fa-solid fa-network-wired text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-white tracking-wide">Ford-Fulkerson Visualizer</h1>
+                <p class="text-xs text-slate-400">Edmonds-Karp Implementation</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-6 text-sm">
+            <div class="flex flex-col items-end">
+                <span class="text-slate-400 text-xs uppercase tracking-wider">Current Max Flow</span>
+                <span id="max-flow-display" class="text-2xl font-bold text-green-400 font-mono">0</span>
+            </div>
+            <div class="h-8 w-px bg-slate-600"></div>
+            <div class="flex gap-4">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-slate-500"></span>
+                    <span class="text-slate-400">Capacity</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                    <span class="text-slate-400">Flow</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                    <span class="text-slate-400">Path</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- Left: Visualization Canvas -->
+        <section class="flex-1 relative bg-slate-900 flex flex-col">
+            <!-- Canvas Container -->
+            <div id="canvas-container" class="flex-1 w-full h-full relative overflow-hidden">
+                <svg id="graph-svg" class="w-full h-full block">
+                    <!-- Definitions for arrows -->
+                    <defs>
+                        <marker id="arrow-head-default" markerWidth="10" markerHeight="7" refX="28" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#475569" />
+                        </marker>
+                        <marker id="arrow-head-active" markerWidth="10" markerHeight="7" refX="28" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b" />
+                        </marker>
+                    </defs>
+                    <g id="edges-layer"></g>
+                    <g id="nodes-layer"></g>
+                    <g id="labels-layer"></g>
+                </svg>
+
+                <!-- Floating Tooltip/Status -->
+                <div id="action-tooltip" class="absolute top-4 left-1/2 transform -translate-x-1/2 bg-slate-800/90 backdrop-blur border border-slate-600 px-4 py-2 rounded-full shadow-lg text-sm text-white opacity-0 transition-opacity duration-300">
+                    Initializing Graph...
+                </div>
+            </div>
+
+            <!-- Controls Bar -->
+            <div class="h-20 bg-slate-800 border-t border-slate-700 flex items-center justify-between px-8">
+                
+                <!-- Playback Controls -->
+                <div class="flex items-center gap-4">
+                    <button id="btn-reset" class="p-2 text-slate-400 hover:text-white transition-colors" title="Reset">
+                        <i class="fa-solid fa-rotate-left fa-lg"></i>
+                    </button>
+                    <button id="btn-prev" class="w-10 h-10 rounded-full bg-slate-700 text-white hover:bg-slate-600 flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-backward-step"></i>
+                    </button>
+                    <button id="btn-play" class="w-12 h-12 rounded-full bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/30 flex items-center justify-center transition-all scale-100 active:scale-95">
+                        <i class="fa-solid fa-play ml-1"></i>
+                    </button>
+                    <button id="btn-next" class="w-10 h-10 rounded-full bg-slate-700 text-white hover:bg-slate-600 flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-forward-step"></i>
+                    </button>
+                </div>
+
+                <!-- Progress & Speed -->
+                <div class="flex flex-col gap-2 w-64">
+                    <div class="flex justify-between text-xs text-slate-400">
+                        <span>Speed</span>
+                        <span id="speed-label">1x</span>
+                    </div>
+                    <input type="range" id="speed-slider" min="1" max="5" value="3" class="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                </div>
+
+                <!-- Step Counter -->
+                <div class="text-right">
+                    <p class="text-xs text-slate-400">Step</p>
+                    <p class="font-mono text-lg font-bold"><span id="current-step">0</span> / <span id="total-steps">0</span></p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right: Code & Logs -->
+        <aside class="w-[450px] bg-slate-800 border-l border-slate-700 flex flex-col shadow-2xl z-20">
+            
+            <!-- Pseudocode Panel -->
+            <div class="flex-1 flex flex-col border-b border-slate-700 min-h-[40%]">
+                <div class="px-4 py-3 bg-slate-900 border-b border-slate-700 flex justify-between items-center">
+                    <h3 class="font-semibold text-sm text-slate-300">Algorithm Pseudocode</h3>
+                    <span class="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Edmonds-Karp</span>
+                </div>
+                <div class="flex-1 bg-slate-900 p-4 overflow-y-auto code-font text-xs text-slate-400 leading-6" id="code-panel">
+                    <div id="line-1" class="pl-2 rounded">function FordFulkerson(Graph, s, t):</div>
+                    <div id="line-2" class="pl-6 rounded">max_flow = 0</div>
+                    <div id="line-3" class="pl-6 rounded">while (path = bfs(Graph, s, t)) exists:</div>
+                    <div id="line-4" class="pl-10 rounded">min_cap = infinity</div>
+                    <div id="line-5" class="pl-10 rounded"># Find bottleneck</div>
+                    <div id="line-6" class="pl-10 rounded">for (u, v) in path:</div>
+                    <div id="line-7" class="pl-14 rounded">min_cap = min(min_cap, capacity(u,v) - flow(u,v))</div>
+                    <div id="line-8" class="pl-10 rounded"># Augment flow</div>
+                    <div id="line-9" class="pl-10 rounded">for (u, v) in path:</div>
+                    <div id="line-10" class="pl-14 rounded">flow(u, v) += min_cap</div>
+                    <div id="line-11" class="pl-14 rounded">flow(v, u) -= min_cap</div>
+                    <div id="line-12" class="pl-10 rounded">max_flow += min_cap</div>
+                    <div id="line-13" class="pl-6 rounded">return max_flow</div>
+                </div>
+            </div>
+
+            <!-- Analysis & Logs Panel -->
+            <div class="flex-1 flex flex-col bg-slate-800">
+                <div class="px-4 py-3 border-b border-slate-700 bg-slate-800">
+                    <h3 class="font-semibold text-sm text-slate-300">Execution Log</h3>
+                </div>
+                <div id="log-container" class="flex-1 overflow-y-auto p-4 space-y-3 font-mono text-xs">
+                    <!-- Logs will be injected here -->
+                    <div class="text-slate-500 italic">Ready to start simulation...</div>
+                </div>
+                
+                <!-- Complexity Info Footer -->
+                <div class="p-4 bg-slate-900 border-t border-slate-700 text-xs text-slate-400">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <span class="block text-slate-500 mb-1">Time Complexity</span>
+                            <span class="text-blue-400 font-mono">O(V * E²)</span>
+                        </div>
+                        <div>
+                            <span class="block text-slate-500 mb-1">Space Complexity</span>
+                            <span class="text-blue-400 font-mono">O(V + E)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+    </main>
+
+<script>
+/**
+ * Ford-Fulkerson (Edmonds-Karp) Visualization Logic
+ * -----------------------------------------------
+ * 1. Data Structure: Adjacency List with Capacity & Flow objects.
+ * 2. Visual Engine: SVG + GSAP.
+ * 3. Controller: Pre-calculates steps, handles playback state.
+ */
+
+// --- Graph Data ---
+// Nodes: x, y coordinates (0-100 range for relative positioning)
+const NODES = {
+    'S': { x: 10, y: 50, label: 'Source', type: 'source' },
+    'A': { x: 35, y: 20, label: 'A', type: 'node' },
+    'B': { x: 35, y: 80, label: 'B', type: 'node' },
+    'C': { x: 65, y: 20, label: 'C', type: 'node' },
+    'D': { x: 65, y: 80, label: 'D', type: 'node' },
+    'T': { x: 90, y: 50, label: 'Sink', type: 'sink' }
+};
+
+// Edges: u -> v, capacity
+// Defined to create interesting flow dynamics
+const INITIAL_EDGES = [
+    { u: 'S', v: 'A', cap: 10 },
+    { u: 'S', v: 'B', cap: 10 },
+    { u: 'A', v: 'B', cap: 2 },  // Cross edge
+    { u: 'A', v: 'C', cap: 4 },
+    { u: 'A', v: 'D', cap: 8 },
+    { u: 'B', v: 'D', cap: 9 },
+    { u: 'D', v: 'C', cap: 6 },  // Backward/Upward movement possible
+    { u: 'C', v: 'T', cap: 10 },
+    { u: 'D', v: 'T', cap: 10 }
+];
+
+// --- Visualization Engine ---
+
+class GraphVisualizer {
+    constructor(svgId) {
+        this.svg = document.getElementById(svgId);
+        this.edgesLayer = document.getElementById('edges-layer');
+        this.nodesLayer = document.getElementById('nodes-layer');
+        this.width = this.svg.clientWidth;
+        this.height = this.svg.clientHeight;
+        
+        // Map DOM elements to logical IDs
+        this.domNodes = {};
+        this.domEdges = {}; // key: "u-v"
+        
+        // Resize observer
+        window.addEventListener('resize', () => this.resize());
+        
+        this.init();
+    }
+
+    resize() {
+        this.width = this.svg.clientWidth;
+        this.height = this.svg.clientHeight;
+        this.init(); // Redraw static structure
+    }
+
+    // Convert relative coords (0-100) to pixel coords
+    getPos(nodeKey) {
+        const n = NODES[nodeKey];
+        return {
+            x: (n.x / 100) * this.width,
+            y: (n.y / 100) * this.height
+        };
+    }
+
+    init() {
+        this.edgesLayer.innerHTML = '';
+        this.nodesLayer.innerHTML = '';
+
+        // Draw Edges First
+        INITIAL_EDGES.forEach(edge => {
+            this.createEdgeElement(edge.u, edge.v, edge.cap);
+        });
+
+        // Draw Nodes
+        Object.keys(NODES).forEach(key => {
+            this.createNodeElement(key);
+        });
+    }
+
+    createNodeElement(key) {
+        const pos = this.getPos(key);
+        const data = NODES[key];
+        
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("transform", `translate(${pos.x}, ${pos.y})`);
+        g.setAttribute("id", `node-${key}`);
+        g.classList.add("node-group");
+
+        // Circle
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("r", 20);
+        let fill = "#1e293b"; // slate 800
+        let stroke = "#94a3b8"; // slate 400
+        
+        if (data.type === 'source') { stroke = "#22c55e"; fill = "#052e16"; } // Green
+        if (data.type === 'sink') { stroke = "#ef4444"; fill = "#450a0a"; }   // Red
+
+        circle.setAttribute("fill", fill);
+        circle.setAttribute("stroke", stroke);
+        circle.setAttribute("stroke-width", "3");
+        circle.classList.add("node-circle");
+
+        // Label
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("dy", ".3em");
+        text.setAttribute("fill", "#fff");
+        text.setAttribute("font-weight", "bold");
+        text.setAttribute("class", "code-font pointer-events-none");
+        text.textContent = key;
+
+        g.appendChild(circle);
+        g.appendChild(text);
+        this.nodesLayer.appendChild(g);
+        this.domNodes[key] = g;
+    }
+
+    createEdgeElement(u, v, cap) {
+        const start = this.getPos(u);
+        const end = this.getPos(v);
+        
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("id", `edge-${u}-${v}`);
+
+        // Calculate offset for arrow/line end so it stops at circle edge
+        const angle = Math.atan2(end.y - start.y, end.x - start.x);
+        const radius = 24; // Node radius + buffer
+        const x1 = start.x + Math.cos(angle) * radius;
+        const y1 = start.y + Math.sin(angle) * radius;
+        const x2 = end.x - Math.cos(angle) * radius;
+        const y2 = end.y - Math.sin(angle) * radius;
+
+        // Background Line (Capacity)
+        const bgLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        bgLine.setAttribute("x1", x1);
+        bgLine.setAttribute("y1", y1);
+        bgLine.setAttribute("x2", x2);
+        bgLine.setAttribute("y2", y2);
+        bgLine.setAttribute("stroke", "#334155"); // Slate 700
+        bgLine.setAttribute("stroke-width", "6");
+        bgLine.setAttribute("marker-end", "url(#arrow-head-default)");
+
+        // Flow Line (Overlay)
+        const flowLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        flowLine.setAttribute("x1", x1);
+        flowLine.setAttribute("y1", y1);
+        flowLine.setAttribute("x2", x2);
+        flowLine.setAttribute("y2", y2);
+        flowLine.setAttribute("stroke", "#3b82f6"); // Blue 500
+        flowLine.setAttribute("stroke-width", "6");
+        flowLine.setAttribute("stroke-dasharray", "1000"); // Start hidden
+        flowLine.setAttribute("stroke-dashoffset", "1000");
+        flowLine.setAttribute("id", `flowline-${u}-${v}`);
+        
+        // Calculate midpoint for text
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2 - 10; // offset up
+
+        // Capacity/Flow Label
+        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        text.setAttribute("x", midX);
+        text.setAttribute("y", midY);
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("fill", "#94a3b8");
+        text.setAttribute("font-size", "12");
+        text.setAttribute("class", "code-font");
+        text.setAttribute("id", `text-${u}-${v}`);
+        text.textContent = `0 / ${cap}`;
+
+        // Invisible hit area for hover
+        const hitArea = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        hitArea.setAttribute("x1", x1);
+        hitArea.setAttribute("y1", y1);
+        hitArea.setAttribute("x2", x2);
+        hitArea.setAttribute("y2", y2);
+        hitArea.setAttribute("stroke", "transparent");
+        hitArea.setAttribute("stroke-width", "20");
+        hitArea.style.cursor = "default";
+
+        g.appendChild(bgLine);
+        g.appendChild(flowLine);
+        g.appendChild(text);
+        g.appendChild(hitArea);
+        this.edgesLayer.appendChild(g);
+
+        this.domEdges[`${u}-${v}`] = {
+            group: g,
+            bgLine: bgLine,
+            flowLine: flowLine,
+            text: text,
+            length: Math.sqrt(Math.pow(x2-x1, 2) + Math.pow(y2-y1, 2))
+        };
+    }
+
+    // Animation Methods
+    
+    resetVisuals() {
+        // Reset all colors, strokes, texts
+        Object.keys(this.domEdges).forEach(key => {
+            const el = this.domEdges[key];
+            gsap.set(el.flowLine, { strokeDashoffset: 1000, stroke: "#3b82f6" });
+            gsap.set(el.bgLine, { stroke: "#334155", markerEnd: "url(#arrow-head-default)" });
+            // Note: Text content update is handled by step data, but visuals here
+            gsap.set(el.text, { fill: "#94a3b8", scale: 1 });
+        });
+        Object.keys(this.domNodes).forEach(key => {
+             gsap.set(this.domNodes[key].querySelector('circle'), { fillOpacity: 1, strokeWidth: 3 });
+        });
+    }
+
+    highlightPath(pathEdges, color = "#f59e0b") {
+        pathEdges.forEach(edgeStr => {
+            const el = this.domEdges[edgeStr];
+            if(el) {
+                gsap.to(el.bgLine, { stroke: color, markerEnd: "url(#arrow-head-active)", duration: 0.3 });
+                gsap.fromTo(el.bgLine, { strokeWidth: 6 }, { strokeWidth: 8, yoyo: true, repeat: 1, duration: 0.2 });
+            }
+        });
+    }
+
+    updateFlow(u, v, currentFlow, capacity, isFull) {
+        const key = `${u}-${v}`;
+        const el = this.domEdges[key];
+        if (!el) return;
+
+        // Update Text
+        el.text.textContent = `${currentFlow} / ${capacity}`;
+        gsap.from(el.text, { scale: 1.5, duration: 0.3, ease: "back.out(1.7)" });
+
+        if (isFull) {
+            gsap.to(el.text, { fill: "#f87171" }); // Red text if full
+        }
+
+        // Animate Flow Bar
+        // We use dashoffset to simulate the bar filling up relative to capacity
+        // dasharray 1000 is arbitrary large number. 
+        // 0 offset = full, 1000 offset = empty.
+        // But we want width based on percentage.
+        
+        // Better approach for GSAP flow visualization:
+        // Use SVG totalLength logic
+        const percent = currentFlow / capacity;
+        const totalLen = 1000; 
+        const newOffset = totalLen * (1 - percent);
+        
+        gsap.to(el.flowLine, { 
+            strokeDashoffset: newOffset, 
+            duration: 0.8, 
+            ease: "power2.out" 
+        });
+    }
+
+    pulseNode(nodeId, color = "#38bdf8") {
+        const el = this.domNodes[nodeId];
+        if(!el) return;
+        const circle = el.querySelector('circle');
+        gsap.fromTo(circle, 
+            { stroke: color, strokeWidth: 3, scale: 1 }, 
+            { strokeWidth: 8, scale: 1.2, duration: 0.3, yoyo: true, repeat: 1 }
+        );
+    }
+}
+
+// --- Algorithm Logic (Generator) ---
+
+class Algorithm {
+    constructor() {
+        this.steps = [];
+        this.currentMaxFlow = 0;
+    }
+
+    run() {
+        this.steps = [];
+        
+        // Deep copy structure for simulation
+        let adj = {};
+        Object.keys(NODES).forEach(n => adj[n] = []);
+        let edges = {}; // Key: u-v, Val: {cap, flow}
+
+        INITIAL_EDGES.forEach(e => {
+            // Forward edge
+            adj[e.u].push(e.v);
+            adj[e.v].push(e.u); // Add back reference for residual graph traversal check
+            
+            edges[`${e.u}-${e.v}`] = { cap: e.cap, flow: 0 };
+            edges[`${e.v}-${e.u}`] = { cap: 0, flow: 0 }; // Residual back-edge
+        });
+
+        this.steps.push({
+            type: 'INIT',
+            msg: "Graph Initialized. Flow is 0.",
+            codeLine: 1,
+            maxFlow: 0,
+            edgesState: JSON.parse(JSON.stringify(edges))
+        });
+
+        let maxFlow = 0;
+
+        while (true) {
+            this.steps.push({
+                type: 'BFS_START',
+                msg: "Starting BFS to find augmenting path from S to T...",
+                codeLine: 3,
+                maxFlow: maxFlow
+            });
+
+            // BFS
+            let parent = {};
+            let queue = ['S'];
+            let visited = new Set(['S']);
+            let pathFound = false;
+
+            while (queue.length > 0) {
+                let u = queue.shift();
+                
+                this.steps.push({
+                    type: 'VISIT_NODE',
+                    node: u,
+                    msg: `BFS Visiting Node ${u}`,
+                    codeLine: 3,
+                    maxFlow: maxFlow
+                });
+
+                if (u === 'T') {
+                    pathFound = true;
+                    break;
+                }
+
+                for (let v of adj[u]) {
+                    // Check residual capacity
+                    // Cap(u,v) - Flow(u,v) > 0
+                    // Note: In residual graph logic:
+                    // If regular edge u->v: residual = cap - flow
+                    // If back edge v->u (virtual): residual = flow of u->v
+                    
+                    // Simple lookup in our edges object which tracks both directions
+                    let residualCap = 0;
+                    
+                    // Is this a forward edge or backward edge in original graph?
+                    if (edges[`${u}-${v}`]) {
+                        // Edge exists in our tracking
+                         // Capacity is fixed, flow changes.
+                         // Residual = Capacity - Flow
+                         // However, for back edges (which have 0 capacity in our object initially),
+                         // we need to handle logic carefully.
+                         
+                         // SIMPLIFIED EDMONDS-KARP DATA STORAGE:
+                         // Store residue directly for logic, update flow for display.
+                         
+                         // Let's use the standard definition:
+                         // Residual capacity of (u,v) is capacity(u,v) - flow(u,v)
+                         // If edge doesn't exist in original, capacity is 0.
+                         // But we populated edges[v-u] with cap 0.
+                         // So checking edges[u-v].cap - edges[u-v].flow works for both.
+                         // Wait, for back edge v->u, residual is flow(u->v).
+                         // My edges obj has u-v: {cap: 10, flow: 0} and v-u: {cap: 0, flow: 0}.
+                         // When we push flow u->v, edges[u-v].flow goes up.
+                         // Residual u->v goes down. Residual v->u should go UP.
+                         // To make this simple for visualization:
+                         // I will manage residual graph logic explicitly here.
+                    }
+                }
+            }
+            
+            // --- RE-IMPLEMENTING ALGO FOR CLARITY AND CORRECTNESS ---
+            
+            // Reset for this iteration
+            parent = {};
+            queue = ['S'];
+            visited = new Set(['S']);
+            pathFound = false;
+            
+            // Helper to get residual capacity
+            const getResidual = (u, v) => {
+                // If forward edge exists in original
+                if (INITIAL_EDGES.find(e => e.u === u && e.v === v)) {
+                    return edges[`${u}-${v}`].cap - edges[`${u}-${v}`].flow;
+                }
+                // If backward edge (v->u exists in original)
+                if (INITIAL_EDGES.find(e => e.u === v && e.v === u)) {
+                    return edges[`${v}-${u}`].flow; // Can push back flow
+                }
+                return 0;
+            };
+
+            while(queue.length > 0) {
+                let u = queue.shift();
+                if (u === 'T') {
+                    pathFound = true;
+                    break;
+                }
+
+                // Check neighbors
+                // We need all connected nodes
+                let neighbors = [];
+                INITIAL_EDGES.forEach(e => {
+                    if(e.u === u) neighbors.push(e.v);
+                    if(e.v === u) neighbors.push(e.u);
+                });
+
+                for(let v of neighbors) {
+                    if (!visited.has(v) && getResidual(u, v) > 0) {
+                        visited.add(v);
+                        parent[v] = u;
+                        queue.push(v);
+                    }
+                }
+            }
+
+            if (!pathFound) {
+                this.steps.push({
+                    type: 'NO_PATH',
+                    msg: "No more augmenting paths found. Algorithm Complete.",
+                    codeLine: 13,
+                    maxFlow: maxFlow
+                });
+                break;
+            }
+
+            // Reconstruct Path
+            let path = [];
+            let curr = 'T';
+            while (curr !== 'S') {
+                path.unshift(curr);
+                curr = parent[curr];
+            }
+            path.unshift('S');
+
+            // Visualize Path Found
+            this.steps.push({
+                type: 'PATH_FOUND',
+                path: path,
+                msg: `Augmenting path found: ${path.join(' -> ')}`,
+                codeLine: 6,
+                maxFlow: maxFlow
+            });
+
+            // Find Bottleneck
+            let bottleneck = Infinity;
+            for (let i = 0; i < path.length - 1; i++) {
+                let u = path[i];
+                let v = path[i+1];
+                bottleneck = Math.min(bottleneck, getResidual(u, v));
+            }
+
+            this.steps.push({
+                type: 'BOTTLENECK',
+                val: bottleneck,
+                msg: `Bottleneck capacity on this path is ${bottleneck}`,
+                codeLine: 7,
+                maxFlow: maxFlow
+            });
+
+            // Augment Flow
+            for (let i = 0; i < path.length - 1; i++) {
+                let u = path[i];
+                let v = path[i+1];
+                
+                // If forward edge
+                if (INITIAL_EDGES.find(e => e.u === u && e.v === v)) {
+                    edges[`${u}-${v}`].flow += bottleneck;
+                } else {
+                    // Backward edge, reduce flow on original
+                    edges[`${v}-${u}`].flow -= bottleneck;
+                }
+            }
+            
+            maxFlow += bottleneck;
+
+            // Snapshot after update
+            this.steps.push({
+                type: 'UPDATE_FLOW',
+                edgesState: JSON.parse(JSON.stringify(edges)), // Copy state
+                added: bottleneck,
+                path: path,
+                msg: `Augmented flow by ${bottleneck}. Updating graph...`,
+                codeLine: 12,
+                maxFlow: maxFlow
+            });
+        }
+        
+        return this.steps;
+    }
+}
+
+// --- Controller ---
+
+class Controller {
+    constructor() {
+        this.viz = new GraphVisualizer('graph-svg');
+        this.algo = new Algorithm();
+        this.steps = [];
+        this.currentStepIndex = -1;
+        this.isPlaying = false;
+        this.timer = null;
+        this.speed = 1000; // ms
+
+        // UI Elements
+        this.els = {
+            btnPlay: document.getElementById('btn-play'),
+            btnPrev: document.getElementById('btn-prev'),
+            btnNext: document.getElementById('btn-next'),
+            btnReset: document.getElementById('btn-reset'),
+            slider: document.getElementById('speed-slider'),
+            stepCur: document.getElementById('current-step'),
+            stepTot: document.getElementById('total-steps'),
+            maxFlow: document.getElementById('max-flow-display'),
+            log: document.getElementById('log-container'),
+            tooltip: document.getElementById('action-tooltip'),
+            speedLabel: document.getElementById('speed-label')
+        };
+
+        this.init();
+    }
+
+    init() {
+        // Calculate all steps
+        this.steps = this.algo.run();
+        this.els.stepTot.textContent = this.steps.length - 1;
+
+        // Listeners
+        this.els.btnPlay.addEventListener('click', () => this.togglePlay());
+        this.els.btnNext.addEventListener('click', () => this.stepForward());
+        this.els.btnPrev.addEventListener('click', () => this.stepBackward());
+        this.els.btnReset.addEventListener('click', () => this.reset());
+        
+        this.els.slider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            // Map 1-5 to speeds
+            const speeds = [2000, 1500, 1000, 500, 200];
+            this.speed = speeds[val - 1];
+            this.els.speedLabel.textContent = val + 'x';
+            
+            if (this.isPlaying) {
+                this.stopTimer();
+                this.startTimer();
+            }
+        });
+
+        // Initial Render
+        this.renderStep(0);
+    }
+
+    togglePlay() {
+        if (this.isPlaying) {
+            this.pause();
+        } else {
+            this.play();
+        }
+    }
+
+    play() {
+        if (this.currentStepIndex >= this.steps.length - 1) return;
+        this.isPlaying = true;
+        this.els.btnPlay.innerHTML = '<i class="fa-solid fa-pause"></i>';
+        this.els.btnPlay.classList.replace('bg-blue-600', 'bg-amber-500');
+        this.els.btnPlay.classList.replace('hover:bg-blue-500', 'hover:bg-amber-400');
+        this.startTimer();
+    }
+
+    pause() {
+        this.isPlaying = false;
+        this.els.btnPlay.innerHTML = '<i class="fa-solid fa-play ml-1"></i>';
+        this.els.btnPlay.classList.replace('bg-amber-500', 'bg-blue-600');
+        this.els.btnPlay.classList.replace('hover:bg-amber-400', 'hover:bg-blue-500');
+        this.stopTimer();
+    }
+
+    startTimer() {
+        this.timer = setInterval(() => {
+            if (this.currentStepIndex < this.steps.length - 1) {
+                this.stepForward();
+            } else {
+                this.pause();
+            }
+        }, this.speed);
+    }
+
+    stopTimer() {
+        clearInterval(this.timer);
+    }
+
+    reset() {
+        this.pause();
+        this.currentStepIndex = -1;
+        this.renderStep(0);
+        
+        // Clear log
+        this.els.log.innerHTML = '<div class="text-slate-500 italic">Ready to start simulation...</div>';
+    }
+
+    stepForward() {
+        if (this.currentStepIndex < this.steps.length - 1) {
+            this.currentStepIndex++;
+            this.renderStep(this.currentStepIndex);
+        }
+    }
+
+    stepBackward() {
+        if (this.currentStepIndex > 0) {
+            this.currentStepIndex--;
+            this.renderStep(this.currentStepIndex);
+        }
+    }
+
+    // MAIN RENDER FUNCTION
+    renderStep(index) {
+        if (index < 0) index = 0;
+        const step = this.steps[index];
+        const prevStep = index > 0 ? this.steps[index - 1] : null;
+
+        // Update UI Text
+        this.els.stepCur.textContent = index;
+        this.els.maxFlow.textContent = step.maxFlow;
+        this.updateLog(step.msg, step.type);
+        this.highlightCode(step.codeLine);
+        this.showTooltip(step.msg);
+
+        // Update Buttons
+        this.els.btnPrev.disabled = index === 0;
+        this.els.btnNext.disabled = index === this.steps.length - 1;
+
+        // Visual Updates based on Type
+        
+        // 1. Reset transient visual states (highlights) if moving
+        if (step.type !== 'PATH_FOUND') {
+            // Remove path highlights unless we are currently looking at a path found step
+            this.viz.resetVisuals(); 
+            // Re-apply flow state from previous or current step
+            const edges = step.edgesState || (prevStep ? this.findLastEdgesState(index) : null);
+            if (edges) this.applyEdgeState(edges);
+        }
+
+        switch (step.type) {
+            case 'INIT':
+                this.viz.resetVisuals();
+                break;
+            case 'VISIT_NODE':
+                this.viz.pulseNode(step.node);
+                break;
+            case 'PATH_FOUND':
+                // Re-apply flow first to ensure base is clean
+                const edgesBefore = this.findLastEdgesState(index);
+                if(edgesBefore) this.applyEdgeState(edgesBefore);
+                
+                // Construct edge keys for path
+                const pathEdges = [];
+                for(let i=0; i<step.path.length-1; i++) {
+                    // Check direction for visualization
+                    let u = step.path[i];
+                    let v = step.path[i+1];
+                    // We only highlight the edge visually if it matches our DOM ID u-v
+                    // If it's a backward flow, the visual edge is still u-v (or v-u in map)
+                    if(this.viz.domEdges[`${u}-${v}`]) pathEdges.push(`${u}-${v}`);
+                    else if(this.viz.domEdges[`${v}-${u}`]) pathEdges.push(`${v}-${u}`);
+                }
+                this.viz.highlightPath(pathEdges);
+                break;
+            case 'UPDATE_FLOW':
+                this.applyEdgeState(step.edgesState);
+                break;
+        }
+    }
+
+    findLastEdgesState(currentIndex) {
+        for (let i = currentIndex; i >= 0; i--) {
+            if (this.steps[i].edgesState) return this.steps[i].edgesState;
+        }
+        return null;
+    }
+
+    applyEdgeState(edges) {
+        Object.keys(edges).forEach(key => {
+            const data = edges[key];
+            // Only update forward edges in visualization
+            if (this.viz.domEdges[key]) {
+                const isFull = data.flow === data.cap;
+                this.viz.updateFlow(key.split('-')[0], key.split('-')[1], data.flow, data.cap, isFull);
+            }
+        });
+    }
+
+    updateLog(msg, type) {
+        // Prevent duplicate log at end
+        const lastLog = this.els.log.lastElementChild;
+        if (lastLog && lastLog.innerText.includes(msg)) return;
+
+        const entry = document.createElement('div');
+        entry.className = "border-l-2 pl-2 py-1 text-slate-300 animate-fade-in";
+        
+        let borderColor = "border-slate-600";
+        if (type === 'PATH_FOUND') { borderColor = "border-amber-500"; entry.classList.add('font-bold', 'text-amber-400'); }
+        else if (type === 'UPDATE_FLOW') { borderColor = "border-blue-500"; entry.classList.add('text-blue-300'); }
+        else if (type === 'NO_PATH') { borderColor = "border-green-500"; entry.classList.add('text-green-400'); }
+
+        entry.classList.add(borderColor);
+        entry.innerText = `[Step ${this.currentStepIndex}] ${msg}`;
+        
+        this.els.log.appendChild(entry);
+        this.els.log.scrollTop = this.els.log.scrollHeight;
+    }
+
+    highlightCode(lineNum) {
+        document.querySelectorAll('#code-panel div').forEach(el => {
+            el.classList.remove('bg-slate-700', 'text-white', 'highlight-line');
+        });
+        if (lineNum) {
+            const el = document.getElementById(`line-${lineNum}`);
+            if (el) {
+                el.classList.add('highlight-line', 'text-white');
+                el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
+        }
+    }
+
+    showTooltip(text) {
+        const t = this.els.tooltip;
+        t.innerText = text;
+        t.style.opacity = '1';
+        clearTimeout(this.tooltipTimeout);
+        this.tooltipTimeout = setTimeout(() => {
+            t.style.opacity = '0';
+        }, 3000);
+    }
+}
+
+// Start Application
+window.onload = () => {
+    // Small delay to ensure GSAP loads
+    setTimeout(() => {
+        new Controller();
+    }, 100);
+};
+
+</script>
+</body>
+</html>
