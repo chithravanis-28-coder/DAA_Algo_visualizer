@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kahn's Algorithm Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .code-line {
+            padding: 8px 16px;
+            margin: 2px 0;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .code-line.active {
+            background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%);
+            color: #1f2937;
+            font-weight: 600;
+            transform: translateX(8px);
+            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4);
+        }
+
+        .node {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .node:hover circle {
+            filter: brightness(1.1);
+        }
+
+        .edge {
+            transition: all 0.3s ease;
+        }
+
+        .btn-control {
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-control:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-control:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .info-card {
+            padding: 16px;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            border-left: 4px solid;
+        }
+
+        .complexity-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .queue-item {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 4px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
+        }
+
+        .result-item {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 4px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(67, 233, 123, 0.3);
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .pulse {
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        .tooltip {
+            position: relative;
+        }
+
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 12px;
+            background: #1f2937;
+            color: white;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            margin-bottom: 8px;
+            z-index: 1000;
+        }
+
+        .step-indicator {
+            font-size: 48px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        #visualization-svg {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body class="p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="glass-panel p-6 mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-4xl font-bold text-gray-800 mb-2">Kahn's Algorithm Visualizer</h1>
+                    <p class="text-gray-600">Interactive Topological Sorting Demonstration</p>
+                </div>
+                <div class="text-right">
+                    <div class="step-indicator" id="stepCounter">0</div>
+                    <p class="text-sm text-gray-600">Steps</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Left Panel: Code & Controls -->
+            <div class="space-y-6">
+                <!-- Complexity Analysis -->
+                <div class="glass-panel p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Complexity Analysis</h2>
+                    <div class="space-y-3">
+                        <div class="info-card border-blue-500">
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-700 font-semibold">Time Complexity:</span>
+                                <span class="complexity-badge">O(V + E)</span>
+                            </div>
+                        </div>
+                        <div class="info-card border-purple-500">
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-700 font-semibold">Space Complexity:</span>
+                                <span class="complexity-badge">O(V)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pseudocode -->
+                <div class="glass-panel p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Algorithm Steps</h2>
+                    <div id="pseudocode" class="space-y-1">
+                        <div class="code-line" data-line="0">1. Calculate in-degree for all vertices</div>
+                        <div class="code-line" data-line="1">2. Add vertices with in-degree 0 to queue</div>
+                        <div class="code-line" data-line="2">3. While queue is not empty:</div>
+                        <div class="code-line" data-line="3">&nbsp;&nbsp;&nbsp;4. Dequeue vertex and add to result</div>
+                        <div class="code-line" data-line="4">&nbsp;&nbsp;&nbsp;5. For each neighbor of vertex:</div>
+                        <div class="code-line" data-line="5">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;6. Decrease neighbor's in-degree</div>
+                        <div class="code-line" data-line="6">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;7. If in-degree becomes 0, enqueue</div>
+                        <div class="code-line" data-line="7">8. Check if all vertices processed</div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="glass-panel p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Controls</h2>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button id="playBtn" class="btn-control btn-primary">
+                            <span>▶</span> Play
+                        </button>
+                        <button id="pauseBtn" class="btn-control btn-secondary">
+                            <span>⏸</span> Pause
+                        </button>
+                        <button id="stepBtn" class="btn-control btn-success">
+                            <span>⏭</span> Step
+                        </button>
+                        <button id="resetBtn" class="btn-control btn-primary">
+                            <span>↻</span> Reset
+                        </button>
+                    </div>
+                    <div class="mt-4">
+                        <label class="text-sm font-semibold text-gray-700 mb-2 block">Animation Speed</label>
+                        <input type="range" id="speedSlider" min="0.5" max="3" step="0.5" value="1" 
+                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <div class="flex justify-between text-xs text-gray-600 mt-1">
+                            <span>Slow</span>
+                            <span>Fast</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Visualization -->
+            <div class="space-y-6">
+                <!-- Graph Visualization -->
+                <div class="glass-panel p-6" style="height: 500px;">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Graph Visualization</h2>
+                    <svg id="visualization-svg" viewBox="0 0 600 400"></svg>
+                </div>
+
+                <!-- Data Structures -->
+                <div class="glass-panel p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Current State</h2>
+                    
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-2">Queue (vertices with in-degree 0):</h3>
+                        <div id="queueDisplay" class="min-h-[40px] bg-gray-50 rounded-lg p-2">
+                            <span class="text-gray-400 text-sm">Empty</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-2">Topological Order:</h3>
+                        <div id="resultDisplay" class="min-h-[40px] bg-gray-50 rounded-lg p-2">
+                            <span class="text-gray-400 text-sm">Empty</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-700 mb-2">In-Degrees:</h3>
+                        <div id="inDegreeDisplay" class="bg-gray-50 rounded-lg p-3 font-mono text-sm"></div>
+                    </div>
+                </div>
+
+                <!-- Step Explanation -->
+                <div class="glass-panel p-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4">Step Explanation</h2>
+                    <p id="stepExplanation" class="text-gray-700 leading-relaxed">
+                        Click "Play" or "Step" to begin the algorithm visualization.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Graph configuration
+        const graph = {
+            nodes: ['A', 'B', 'C', 'D', 'E', 'F'],
+            edges: [
+                {from: 'A', to: 'C'},
+                {from: 'A', to: 'D'},
+                {from: 'B', to: 'C'},
+                {from: 'B', to: 'E'},
+                {from: 'C', to: 'F'},
+                {from: 'D', to: 'F'},
+                {from: 'E', to: 'F'}
+            ],
+            positions: {
+                'A': {x: 100, y: 80},
+                'B': {x: 100, y: 240},
+                'C': {x: 250, y: 100},
+                'D': {x: 250, y: 220},
+                'E': {x: 250, y: 320},
+                'F': {x: 450, y: 200}
+            }
+        };
+
+        // Algorithm state
+        let state = {
+            inDegree: {},
+            queue: [],
+            result: [],
+            processed: new Set(),
+            currentVertex: null,
+            currentLine: -1,
+            step: 0,
+            playing: false,
+            speed: 1
+        };
+
+        // Animation settings
+        let animationSpeed = 1500;
+        let currentAnimation = null;
+
+        // Initialize
+        function init() {
+            drawGraph();
+            resetAlgorithm();
+            setupEventListeners();
+        }
+
+        // Draw the graph
+        function drawGraph() {
+            const svg = document.getElementById('visualization-svg');
+            svg.innerHTML = '';
+
+            // Draw edges
+            const edgesGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            edgesGroup.id = 'edges';
+            
+            graph.edges.forEach((edge, idx) => {
+                const from = graph.positions[edge.from];
+                const to = graph.positions[edge.to];
+                
+                // Calculate arrow direction
+                const dx = to.x - from.x;
+                const dy = to.y - from.y;
+                const angle = Math.atan2(dy, dx);
+                const length = Math.sqrt(dx * dx + dy * dy);
+                
+                // Shorten line to account for node radius
+                const startX = from.x + 30 * Math.cos(angle);
+                const startY = from.y + 30 * Math.sin(angle);
+                const endX = to.x - 30 * Math.cos(angle);
+                const endY = to.y - 30 * Math.sin(angle);
+
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', startX);
+                line.setAttribute('y1', startY);
+                line.setAttribute('x2', endX);
+                line.setAttribute('y2', endY);
+                line.setAttribute('stroke', '#cbd5e1');
+                line.setAttribute('stroke-width', '3');
+                line.setAttribute('class', 'edge');
+                line.setAttribute('id', `edge-${edge.from}-${edge.to}`);
+                line.setAttribute('marker-end', 'url(#arrowhead)');
+                edgesGroup.appendChild(line);
+            });
+
+            // Define arrowhead marker
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+            marker.setAttribute('id', 'arrowhead');
+            marker.setAttribute('markerWidth', '10');
+            marker.setAttribute('markerHeight', '10');
+            marker.setAttribute('refX', '9');
+            marker.setAttribute('refY', '3');
+            marker.setAttribute('orient', 'auto');
+            const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            polygon.setAttribute('points', '0 0, 10 3, 0 6');
+            polygon.setAttribute('fill', '#cbd5e1');
+            marker.appendChild(polygon);
+            defs.appendChild(marker);
+            svg.appendChild(defs);
+            svg.appendChild(edgesGroup);
+
+            // Draw nodes
+            const nodesGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            nodesGroup.id = 'nodes';
+            
+            graph.nodes.forEach(node => {
+                const pos = graph.positions[node];
+                const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                group.setAttribute('class', 'node');
+                group.setAttribute('id', `node-${node}`);
+
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', pos.x);
+                circle.setAttribute('cy', pos.y);
+                circle.setAttribute('r', '30');
+                circle.setAttribute('fill', '#667eea');
+                circle.setAttribute('stroke', '#4c51bf');
+                circle.setAttribute('stroke-width', '3');
+                group.appendChild(circle);
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', pos.x);
+                text.setAttribute('y', pos.y);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('dominant-baseline', 'middle');
+                text.setAttribute('fill', 'white');
+                text.setAttribute('font-size', '20');
+                text.setAttribute('font-weight', 'bold');
+                text.textContent = node;
+                group.appendChild(text);
+
+                // In-degree label
+                const inDegreeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                inDegreeText.setAttribute('x', pos.x);
+                inDegreeText.setAttribute('y', pos.y - 50);
+                inDegreeText.setAttribute('text-anchor', 'middle');
+                inDegreeText.setAttribute('fill', '#1f2937');
+                inDegreeText.setAttribute('font-size', '14');
+                inDegreeText.setAttribute('font-weight', '600');
+                inDegreeText.setAttribute('id', `indegree-${node}`);
+                inDegreeText.textContent = 'In: 0';
+                group.appendChild(inDegreeText);
+
+                nodesGroup.appendChild(group);
+            });
+
+            svg.appendChild(nodesGroup);
+        }
+
+        // Reset algorithm to initial state
+        function resetAlgorithm() {
+            // Calculate in-degrees
+            state.inDegree = {};
+            graph.nodes.forEach(node => {
+                state.inDegree[node] = 0;
+            });
+            graph.edges.forEach(edge => {
+                state.inDegree[edge.to]++;
+            });
+
+            state.queue = [];
+            state.result = [];
+            state.processed = new Set();
+            state.currentVertex = null;
+            state.currentLine = -1;
+            state.step = 0;
+            state.playing = false;
+
+            updateDisplay();
+            highlightLine(-1);
+            resetGraphColors();
+            
+            document.getElementById('stepCounter').textContent = '0';
+            document.getElementById('stepExplanation').textContent = 
+                'Click "Play" or "Step" to begin the algorithm visualization.';
+        }
+
+        // Update display elements
+        function updateDisplay() {
+            // Update queue display
+            const queueDisplay = document.getElementById('queueDisplay');
+            if (state.queue.length === 0) {
+                queueDisplay.innerHTML = '<span class="text-gray-400 text-sm">Empty</span>';
+            } else {
+                queueDisplay.innerHTML = state.queue.map(v => 
+                    `<span class="queue-item">${v}</span>`
+                ).join('');
+            }
+
+            // Update result display
+            const resultDisplay = document.getElementById('resultDisplay');
+            if (state.result.length === 0) {
+                resultDisplay.innerHTML = '<span class="text-gray-400 text-sm">Empty</span>';
+            } else {
+                resultDisplay.innerHTML = state.result.map(v => 
+                    `<span class="result-item">${v}</span>`
+                ).join('');
+            }
+
+            // Update in-degree display
+            const inDegreeDisplay = document.getElementById('inDegreeDisplay');
+            inDegreeDisplay.innerHTML = Object.entries(state.inDegree)
+                .map(([node, degree]) => `${node}: ${degree}`)
+                .join(' &nbsp;&nbsp; ');
+
+            // Update in-degree labels on graph
+            Object.entries(state.inDegree).forEach(([node, degree]) => {
+                const label = document.getElementById(`indegree-${node}`);
+                if (label) {
+                    label.textContent = `In: ${degree}`;
+                    gsap.to(label, {
+                        scale: 1.2,
+                        duration: 0.2,
+                        yoyo: true,
+                        repeat: 1
+                    });
+                }
+            });
+        }
+
+        // Highlight code line
+        function highlightLine(lineNumber) {
+            document.querySelectorAll('.code-line').forEach(line => {
+                line.classList.remove('active');
+            });
+            if (lineNumber >= 0) {
+                const line = document.querySelector(`[data-line="${lineNumber}"]`);
+                if (line) {
+                    line.classList.add('active');
+                    line.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+                }
+            }
+        }
+
+        // Reset graph colors
+        function resetGraphColors() {
+            graph.nodes.forEach(node => {
+                const nodeEl = document.querySelector(`#node-${node} circle`);
+                gsap.to(nodeEl, {
+                    fill: '#667eea',
+                    stroke: '#4c51bf',
+                    duration: 0.5
+                });
+            });
+
+            graph.edges.forEach(edge => {
+                const edgeEl = document.getElementById(`edge-${edge.from}-${edge.to}`);
+                gsap.to(edgeEl, {
+                    stroke: '#cbd5e1',
+                    strokeWidth: 3,
+                    duration: 0.5
+                });
+            });
+        }
+
+        // Animate node
+        function animateNode(node, color) {
+            const nodeEl = document.querySelector(`#node-${node} circle`);
+            gsap.to(nodeEl, {
+                fill: color,
+                scale: 1.2,
+                duration: 0.3,
+                transformOrigin: 'center',
+                yoyo: true,
+                repeat: 1
+            });
+        }
+
+        // Animate edge
+        function animateEdge(from, to) {
+            const edgeEl = document.getElementById(`edge-${from}-${to}`);
+            if (edgeEl) {
+                gsap.to(edgeEl, {
+                    stroke: '#fbbf24',
+                    strokeWidth: 5,
+                    duration: 0.3,
+                    yoyo: true,
+                    repeat: 1
+                });
+            }
+        }
+
+        // Algorithm step executor
+        async function executeStep() {
+            state.step++;
+            document.getElementById('stepCounter').textContent = state.step;
+
+            // Step 0: Calculate in-degrees
+            if (state.step === 1) {
+                highlightLine(0);
+                document.getElementById('stepExplanation').textContent = 
+                    'Step 1: Calculating in-degree for all vertices. In-degree is the number of incoming edges for each vertex.';
+                updateDisplay();
+                return true;
+            }
+
+            // Step 1: Initialize queue with vertices having in-degree 0
+            if (state.step === 2) {
+                highlightLine(1);
+                graph.nodes.forEach(node => {
+                    if (state.inDegree[node] === 0) {
+                        state.queue.push(node);
+                        animateNode(node, '#4facfe');
+                    }
+                });
+                updateDisplay();
+                document.getElementById('stepExplanation').textContent = 
+                    `Step 2: Adding vertices with in-degree 0 to the queue: ${state.queue.join(', ')}. These vertices have no dependencies.`;
+                return true;
+            }
+
+            // Main algorithm loop
+            if (state.queue.length > 0) {
+                highlightLine(2);
+                document.getElementById('stepExplanation').textContent = 
+                    'Step 3: Queue is not empty, continuing to process vertices.';
+                
+                await new Promise(resolve => setTimeout(resolve, animationSpeed / state.speed / 2));
+
+                // Dequeue
+                highlightLine(3);
+                const vertex = state.queue.shift();
+                state.currentVertex = vertex;
+                state.result.push(vertex);
+                state.processed.add(vertex);
+                
+                animateNode(vertex, '#43e97b');
+                updateDisplay();
+                
+                document.getElementById('stepExplanation').textContent = 
+                    `Step 4: Dequeued vertex ${vertex} and added it to the topological order.`;
+                
+                await new Promise(resolve => setTimeout(resolve, animationSpeed / state.speed / 2));
+
+                // Process neighbors
+                highlightLine(4);
+                const neighbors = graph.edges
+                    .filter(e => e.from === vertex)
+                    .map(e => e.to);
+                
+                if (neighbors.length > 0) {
+                    document.getElementById('stepExplanation').textContent = 
+                        `Step 5: Processing neighbors of ${vertex}: ${neighbors.join(', ')}`;
+                    
+                    for (const neighbor of neighbors) {
+                        highlightLine(5);
+                        animateEdge(vertex, neighbor);
+                        
+                        await new Promise(resolve => setTimeout(resolve, animationSpeed / state.speed / 3));
+                        
+                        state.inDegree[neighbor]--;
+                        updateDisplay();
+                        
+                        document.getElementById('stepExplanation').textContent = 
+                            `Step 6: Decreased in-degree of ${neighbor} to ${state.inDegree[neighbor]}`;
+                        
+                        await new Promise(resolve => setTimeout(resolve, animationSpeed / state.speed / 3));
+                        
+                        if (state.inDegree[neighbor] === 0) {
+                            highlightLine(6);
+                            state.queue.push(neighbor);
+                            animateNode(neighbor, '#4facfe');
+                            updateDisplay();
+                            
+                            document.getElementById('stepExplanation').textContent = 
+                                `Step 7: In-degree of ${neighbor} became 0, added to queue`;
+                            
+                            await new Promise(resolve => setTimeout(resolve, animationSpeed / state.speed / 3));
+                        }
+                    }
+                }
+
+                return true;
+            }
+
+            // Final check
+            highlightLine(7);
+            if (state.result.length === graph.nodes.length) {
+                document.getElementById('stepExplanation').textContent = 
+                    `✅ Algorithm complete! Topological order: ${state.result.join(' → ')}. All vertices have been processed successfully.`;
+                
+                // Highlight all nodes in result order
+                state.result.forEach((node, idx) => {
+                    setTimeout(() => {
+                        animateNode(node, '#43e97b');
+                    }, idx * 200);
+                });
+            } else {
+                document.getElementById('stepExplanation').textContent = 
+                    `⚠️ Cycle detected! Only processed ${state.result.length} out of ${graph.nodes.length} vertices. The graph contains a cycle and cannot be topologically sorted.`;
+            }
+
+            state.playing = false;
+            return false;
+        }
+
+        // Play animation
+        async function play() {
+            if (state.playing) return;
+            state.playing = true;
+
+            while (state.playing) {
+                const hasMore = await executeStep();
+                if (!hasMore) break;
+                await new Promise(resolve => setTimeout(resolve, animationSpeed / state.speed));
+            }
+        }
+
+        // Pause animation
+        function pause() {
+            state.playing = false;
+        }
+
+        // Single step
+        async function step() {
+            if (state.playing) return;
+            await executeStep();
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            document.getElementById('playBtn').addEventListener('click', play);
+            document.getElementById('pauseBtn').addEventListener('click', pause);
+            document.getElementById('stepBtn').addEventListener('click', step);
+            document.getElementById('resetBtn').addEventListener('click', () => {
+                pause();
+                resetAlgorithm();
+            });
+
+            document.getElementById('speedSlider').addEventListener('input', (e) => {
+                state.speed = parseFloat(e.target.value);
+            });
+        }
+
+        // Initialize on load
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
